@@ -79,7 +79,16 @@ public final class RomManager {
 
         properties.setProperty("ro.sf.lcd_density", String.valueOf(DisplayMetrics.DENSITY_DEVICE_STABLE));
 
+        properties.setProperty("persist.sys.preload.opengl", "false");
+
         try (Writer writer = new FileWriter(propFile)) {
+            properties.store(writer, null);
+        } catch (IOException ignored) {
+        }
+
+        // Also write to /prop.default in rootfs as fallback (in case vendor is not a directory)
+        File rootPropFile = new File(getRootfsDir(context), "prop.default");
+        try (Writer writer = new FileWriter(rootPropFile)) {
             properties.store(writer, null);
         } catch (IOException ignored) {
         }
