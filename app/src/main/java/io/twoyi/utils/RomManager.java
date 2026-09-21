@@ -303,6 +303,10 @@ public final class RomManager {
                             out.write(buffer, 0, bytesRead);
                         }
                     }
+                    
+                    // Set executable permission for all files to match original 7z behavior
+                    // The original 7z command preserves Unix permissions from the archive
+                    outFile.setExecutable(true, false);
                 }
             }
             return true;
