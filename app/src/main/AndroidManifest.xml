@@ -23,6 +23,7 @@
         android:theme="@style/Theme.Twoyi" >
 
         <activity android:name=".Render2Activity"
+            android:exported="true"
             android:theme="@style/Theme.Twoyi.FullScreen"
             android:label="@string/app_name"
             android:configChanges="orientation|keyboardHidden">
