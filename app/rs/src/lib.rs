@@ -135,6 +135,7 @@ pub fn renderer_remove_window(env: JNIEnv, _clz: jclass, surface: jobject) {
 }
 
 #[no_mangle]
+#[deprecated(since = "0.5.5", note = "Use handle_touch_data instead for Android 16+ compatibility")]
 pub fn handle_touch(env: JNIEnv, _clz: jclass, event: jobject) {
     // TODO: cache the field id.
     let ptr = env.get_field(event, "mNativePtr", "J").unwrap();
@@ -149,6 +150,8 @@ pub fn handle_touch(env: JNIEnv, _clz: jclass, event: jobject) {
         input::handle_touch(ev)
     }
 }
+
+const MAX_POINTERS: usize = 5;
 
 #[no_mangle]
 pub fn handle_touch_data(
@@ -165,17 +168,27 @@ pub fn handle_touch_data(
     let pointer_index = pointer_index as usize;
     let pointer_count = pointer_count as usize;
 
-    let mut ids_buf = vec![0i32; pointer_count];
-    let mut x_buf = vec![0f32; pointer_count];
-    let mut y_buf = vec![0f32; pointer_count];
-    let mut p_buf = vec![0f32; pointer_count];
+    if pointer_count > MAX_POINTERS {
+        error!("pointer_count {} exceeds MAX_POINTERS {}", pointer_count, MAX_POINTERS);
+        return;
+    }
 
-    env.get_int_array_region(pointer_ids, 0, &mut ids_buf).unwrap();
-    env.get_float_array_region(xs, 0, &mut x_buf).unwrap();
-    env.get_float_array_region(ys, 0, &mut y_buf).unwrap();
-    env.get_float_array_region(pressures, 0, &mut p_buf).unwrap();
+    // Use stack-allocated arrays to avoid heap allocation on each touch event
+    let mut ids_buf = [0i32; MAX_POINTERS];
+    let mut x_buf = [0f32; MAX_POINTERS];
+    let mut y_buf = [0f32; MAX_POINTERS];
+    let mut p_buf = [0f32; MAX_POINTERS];
 
-    input::handle_touch_data(action, pointer_index, pointer_count, &ids_buf, &x_buf, &y_buf, &p_buf);
+    env.get_int_array_region(pointer_ids, 0, &mut ids_buf[..pointer_count])
+        .expect("Failed to read pointer IDs array");
+    env.get_float_array_region(xs, 0, &mut x_buf[..pointer_count])
+        .expect("Failed to read X coordinates array");
+    env.get_float_array_region(ys, 0, &mut y_buf[..pointer_count])
+        .expect("Failed to read Y coordinates array");
+    env.get_float_array_region(pressures, 0, &mut p_buf[..pointer_count])
+        .expect("Failed to read pressures array");
+
+    input::handle_touch_data(action, pointer_index, pointer_count, &ids_buf[..pointer_count], &x_buf[..pointer_count], &y_buf[..pointer_count], &p_buf[..pointer_count]);
 }
 
 pub fn send_key_code(_env: JNIEnv, _clz: jclass, keycode: jint) {
