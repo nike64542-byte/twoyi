@@ -245,7 +245,24 @@ public class Render2Activity extends Activity implements View.OnTouchListener {
 
     @Override
     public boolean onTouch(View v, MotionEvent event) {
-        Renderer.handleTouch(event);
+        try {
+            int action = event.getActionMasked();
+            int pointerIndex = event.getActionIndex();
+            int pointerCount = event.getPointerCount();
+            int[] pointerIds = new int[pointerCount];
+            float[] xs = new float[pointerCount];
+            float[] ys = new float[pointerCount];
+            float[] pressures = new float[pointerCount];
+            for (int i = 0; i < pointerCount; i++) {
+                pointerIds[i] = event.getPointerId(i);
+                xs[i] = event.getX(i);
+                ys[i] = event.getY(i);
+                pressures[i] = event.getPressure(i);
+            }
+            Renderer.handleTouchData(action, pointerIndex, pointerCount, pointerIds, xs, ys, pressures);
+        } catch (Exception e) {
+            android.util.Log.e("Render2Activity", "handleTouch error", e);
+        }
         return true;
     }
 
