@@ -75,9 +75,16 @@ jobs:
     - name: Sign APK
       run: |
         keytool -genkeypair -v -keystore release.keystore -alias twoyi -keyalg RSA -keysize 2048 -validity 10000 -storepass twoyi123 -keypass twoyi123 -dname "CN=Twoyi, OU=Dev, O=Twoyi, L=Beijing, ST=BJ, C=CN"
-        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass twoyi123 -keypass twoyi123 app/build/outputs/apk/release/app-release-unsigned.apk twoyi
+        APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+        echo "Found APK: $APK_FILE"
+        if [ -z "$APK_FILE" ]; then
+          echo "No APK found!"
+          ls -la app/build/outputs/apk/release/ || echo "Directory not found"
+          exit 1
+        fi
+        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass twoyi123 -keypass twoyi123 "$APK_FILE" twoyi
         mkdir -p signed
-        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:twoyi123 --key-pass pass:twoyi123 --ks-key-alias twoyi --out signed/twoyi.apk app/build/outputs/apk/release/app-release-unsigned.apk
+        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:twoyi123 --key-pass pass:twoyi123 --ks-key-alias twoyi --out signed/twoyi.apk "$APK_FILE"
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
