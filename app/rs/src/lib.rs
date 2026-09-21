@@ -93,11 +93,29 @@ pub fn renderer_init(
             }
         });
 
-        let loader_path: String = env.get_string(loader.into()).unwrap().into();
+        let loader_path: String = match env.get_string(loader.into()) {
+            Ok(s) => s.into(),
+            Err(e) => {
+                error!("Failed to get loader path: {:?}", e);
+                return;
+            }
+        };
         let working_dir = "/data/data/io.twoyi/rootfs";
         let log_path = "/data/data/io.twoyi/log.txt";
-        let outputs = File::create(log_path).unwrap();
-        let errors = outputs.try_clone().unwrap();
+        let outputs = match File::create(log_path) {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to create log file: {:?}", e);
+                return;
+            }
+        };
+        let errors = match outputs.try_clone() {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to clone log file: {:?}", e);
+                return;
+            }
+        };
         let _ = Command::new("./init")
             .current_dir(working_dir)
             .env("TYLOADER", loader_path)
@@ -137,14 +155,23 @@ pub fn renderer_remove_window(env: JNIEnv, _clz: jclass, surface: jobject) {
 #[no_mangle]
 #[deprecated(since = "0.5.5", note = "Use handle_touch_data instead for Android 16+ compatibility")]
 pub fn handle_touch(env: JNIEnv, _clz: jclass, event: jobject) {
-    // TODO: cache the field id.
-    let ptr = env.get_field(event, "mNativePtr", "J").unwrap();
+    let ptr = match env.get_field(event, "mNativePtr", "J") {
+        Ok(v) => v,
+        Err(e) => {
+            error!("handle_touch: failed to get mNativePtr: {:?}", e);
+            return;
+        }
+    };
 
     if let JValue::Long(p) = ptr {
         let ev = unsafe {
-            let nonptr =
-            std::ptr::NonNull::new(std::mem::transmute::<i64, *mut ndk_sys::AInputEvent>(p))
-                .unwrap();
+            let nonptr = match std::ptr::NonNull::new(std::mem::transmute::<i64, *mut ndk_sys::AInputEvent>(p)) {
+                Some(ptr) => ptr,
+                None => {
+                    error!("handle_touch: null native pointer");
+                    return;
+                }
+            };
             ndk::event::MotionEvent::from_ptr(nonptr)
         };
         input::handle_touch(ev)
@@ -179,14 +206,22 @@ pub fn handle_touch_data(
     let mut y_buf = [0f32; MAX_POINTERS];
     let mut p_buf = [0f32; MAX_POINTERS];
 
-    env.get_int_array_region(pointer_ids, 0, &mut ids_buf[..pointer_count])
-        .expect("Failed to read pointer IDs array");
-    env.get_float_array_region(xs, 0, &mut x_buf[..pointer_count])
-        .expect("Failed to read X coordinates array");
-    env.get_float_array_region(ys, 0, &mut y_buf[..pointer_count])
-        .expect("Failed to read Y coordinates array");
-    env.get_float_array_region(pressures, 0, &mut p_buf[..pointer_count])
-        .expect("Failed to read pressures array");
+    if let Err(e) = env.get_int_array_region(pointer_ids, 0, &mut ids_buf[..pointer_count]) {
+        error!("Failed to read pointer IDs array: {:?}", e);
+        return;
+    }
+    if let Err(e) = env.get_float_array_region(xs, 0, &mut x_buf[..pointer_count]) {
+        error!("Failed to read X coordinates array: {:?}", e);
+        return;
+    }
+    if let Err(e) = env.get_float_array_region(ys, 0, &mut y_buf[..pointer_count]) {
+        error!("Failed to read Y coordinates array: {:?}", e);
+        return;
+    }
+    if let Err(e) = env.get_float_array_region(pressures, 0, &mut p_buf[..pointer_count]) {
+        error!("Failed to read pressures array: {:?}", e);
+        return;
+    }
 
     input::handle_touch_data(action, pointer_index, pointer_count, &ids_buf[..pointer_count], &x_buf[..pointer_count], &y_buf[..pointer_count], &p_buf[..pointer_count]);
 }
