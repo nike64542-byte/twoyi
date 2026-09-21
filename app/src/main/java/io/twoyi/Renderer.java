@@ -39,5 +39,8 @@ public class Renderer {
 
     public static native void handleTouch(MotionEvent event);
 
+    public static native void handleTouchData(int action, int pointerIndex, int pointerCount,
+            int[] pointerIds, float[] xs, float[] ys, float[] pressures);
+
     public static native void sendKeycode(int keycode);
 }
