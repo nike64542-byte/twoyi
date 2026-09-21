@@ -16,7 +16,6 @@ import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.Log;
 
-import com.hzy.libp7zip.P7ZipApi;
 import com.topjohnwu.superuser.Shell;
 
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
@@ -275,15 +274,42 @@ public final class RomManager {
         if (!rootfs3rd.exists()) {
             return false;
         }
-        int err = extractRootfs(context, rootfs3rd);
-        return err == 0;
+        boolean success = extractRootfsWithSevenZFile(context, rootfs3rd);
+        return success;
     }
 
-    public static int extractRootfs(Context context, File rootfs7z) {
-
-        int cpu = Runtime.getRuntime().availableProcessors();
-        return P7ZipApi.executeCommand(String.format(Locale.US, "7z x -mmt=%d -aoa '%s' '-o%s'",
-                cpu, rootfs7z, context.getDataDir()));
+    public static boolean extractRootfsWithSevenZFile(Context context, File rootfs7z) {
+        try (SevenZFile sevenZFile = new SevenZFile(rootfs7z)) {
+            SevenZArchiveEntry entry;
+            File rootfsDir = getRootfsDir(context);
+            
+            while ((entry = sevenZFile.getNextEntry()) != null) {
+                File outFile = new File(rootfsDir, entry.getName());
+                
+                if (entry.isDirectory()) {
+                    outFile.mkdirs();
+                } else {
+                    // Ensure parent directory exists
+                    File parent = outFile.getParentFile();
+                    if (parent != null && !parent.exists()) {
+                        parent.mkdirs();
+                    }
+                    
+                    // Extract file
+                    try (OutputStream out = new FileOutputStream(outFile)) {
+                        byte[] buffer = new byte[8192];
+                        int bytesRead;
+                        while ((bytesRead = sevenZFile.read(buffer)) != -1) {
+                            out.write(buffer, 0, bytesRead);
+                        }
+                    }
+                }
+            }
+            return true;
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to extract 7z file", e);
+            return false;
+        }
     }
 
     public static boolean extractRootfsInAssets(Context context) {
@@ -303,13 +329,13 @@ public final class RomManager {
         }
         long t2 = SystemClock.elapsedRealtime();
 
-        int ret = extractRootfs(context, rootfs7z);
+        boolean ret = extractRootfsWithSevenZFile(context, rootfs7z);
 
         long t3 = SystemClock.elapsedRealtime();
 
         Log.i(TAG, "extract rootfs, read assets: " + (t2 - t1) + " un7z: " + (t3 - t2) + "ret: " + ret);
 
-        return ret == 0;
+        return ret;
     }
 
     public static File getRootfsDir(Context context) {
