@@ -63,6 +63,10 @@ jobs:
         7z e app/src/main/assets/rootfs.7z "rootfs/init" -o/tmp/init_extract -y
         cp /tmp/init_extract/init app/src/main/jniLibs/arm64-v8a/libinit.so
         chmod 755 app/src/main/jniLibs/arm64-v8a/libinit.so
+        
+        # Compile minimal EGL stub library to prevent OpenGL ES abort
+        $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang \
+          -shared -fPIC -o app/src/main/jniLibs/arm64-v8a/libGLES_stub.so gles_stub.c
         ls -la app/src/main/jniLibs/arm64-v8a/
 
     - name: Cache Gradle packages
