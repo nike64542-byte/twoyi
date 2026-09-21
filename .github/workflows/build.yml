@@ -74,7 +74,13 @@ jobs:
 
     - name: Generate Keystore
       run: |
-        keytool -genkeypair -v -keystore release.keystore -alias twoyi -keyalg RSA -keysize 2048 -validity 10000 -storepass ${{ secrets.KEYSTORE_PASSWORD }} -keypass ${{ secrets.KEYSTORE_PASSWORD }} -dname "CN=Twoyi, OU=Dev, O=Twoyi, L=Beijing, ST=BJ, C=CN"
+        KEYSTORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
+        if [ -z "$KEYSTORE_PASS" ]; then
+          KEYSTORE_PASS="twoyi123"
+          echo "⚠️ KEYSTORE_PASSWORD not set, using default password"
+        fi
+        keytool -genkeypair -v -keystore release.keystore -alias twoyi -keyalg RSA -keysize 2048 -validity 10000 -storepass "$KEYSTORE_PASS" -keypass "$KEYSTORE_PASS" -dname "CN=Twoyi, OU=Dev, O=Twoyi, L=Beijing, ST=BJ, C=CN"
+        echo "KEYSTORE_PASS=$KEYSTORE_PASS" >> $GITHUB_ENV
 
     - name: Sign APK
       run: |
@@ -87,7 +93,7 @@ jobs:
         fi
         mkdir -p signed
         $ANDROID_HOME/build-tools/34.0.0/zipalign -v -p 4 "$APK_FILE" signed/twoyi-aligned.apk
-        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --ks-key-alias twoyi --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --out signed/twoyi.apk signed/twoyi-aligned.apk
+        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:$KEYSTORE_PASS --key-pass pass:$KEYSTORE_PASS --ks-key-alias twoyi --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --out signed/twoyi.apk signed/twoyi-aligned.apk
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
