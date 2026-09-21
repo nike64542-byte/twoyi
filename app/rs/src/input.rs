@@ -14,7 +14,7 @@ use std::sync::mpsc::{ channel, Sender};
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
 
-use log::info;
+use log::{info, error};
 
 const FF_MAX: u16 = 0x7f;
 
@@ -179,6 +179,121 @@ pub fn handle_touch(ev: MotionEvent) {
             MotionAction::Cancel | MotionAction::PointerUp => {
                 // let x = pointer.x();
                 // let y = pointer.y();
+
+                let mut mt = G_INPUT_MT.lock().unwrap();
+                if mt[pointer_id as usize] == 0 {
+                    return;
+                }
+
+                mt[pointer_id as usize] = 0;
+                input_event_write(fd, EV_ABS, ABS_MT_SLOT, pointer_id);
+                input_event_write(fd, EV_ABS, ABS_MT_TRACKING_ID, -1);
+                input_event_write(fd, EV_SYN, SYN_REPORT, SYN_REPORT);
+            }
+            _ => {}
+        }
+    }
+}
+
+pub fn handle_touch_data(
+    action: i32,
+    pointer_index: usize,
+    pointer_count: usize,
+    pointer_ids: &[i32],
+    xs: &[f32],
+    ys: &[f32],
+    pressures: &[f32],
+) {
+    let opt = INPUT_SENDER.lock().unwrap();
+    if let Some(ref fd) = *opt {
+
+        static G_INPUT_MT: Lazy<Mutex<[i32;MAX_POINTERS]>> = Lazy::new(|| {std::sync::Mutex::new([0i32;MAX_POINTERS])});
+
+        match action {
+            // ACTION_DOWN=0, ACTION_POINTER_DOWN=5
+            0 | 5 => {
+                if pointer_index >= pointer_count {
+                    return;
+                }
+                let pointer_id = pointer_ids[pointer_index];
+                if (pointer_id as usize) >= MAX_POINTERS {
+                    error!("pointer_id {} exceeds MAX_POINTERS", pointer_id);
+                    return;
+                }
+                let x = xs[pointer_index];
+                let y = ys[pointer_index];
+                let pressure = pressures[pointer_index];
+
+                let mut mt = G_INPUT_MT.lock().unwrap();
+                mt[pointer_id as usize] = 1;
+
+                let mut index = 0;
+                while index < MAX_POINTERS {
+                    if mt[index] != 0 {
+                        input_event_write(fd, EV_ABS, ABS_MT_SLOT, pointer_id);
+                        input_event_write(fd, EV_ABS, ABS_MT_TRACKING_ID, pointer_id + 1);
+
+                        if index == 0 {
+                            input_event_write(fd, EV_KEY, BTN_TOUCH, 108);
+                            input_event_write(fd, EV_KEY, BTN_TOOL_FINGER, 108);
+                        }
+
+                        input_event_write(fd, EV_ABS, ABS_MT_POSITION_X, x as i32);
+                        input_event_write(fd, EV_ABS, ABS_MT_POSITION_Y, y as i32);
+
+                        input_event_write(fd, EV_ABS, ABS_MT_PRESSURE, pressure as i32);
+
+                        input_event_write(fd, EV_SYN, SYN_REPORT, SYN_REPORT);
+                    }
+                    index = index + 1;
+                }
+            }
+            // ACTION_UP=1
+            1 => {
+                let mut mt = G_INPUT_MT.lock().unwrap();
+                let mut index = 0;
+                while index != MAX_POINTERS {
+                    if mt[index] != 0 {
+                        mt[index] = 0;
+                        input_event_write(fd, EV_ABS, ABS_MT_SLOT, index as i32);
+                        input_event_write(fd, EV_ABS, ABS_MT_TRACKING_ID, -1);
+                        input_event_write(fd, EV_SYN, SYN_REPORT, SYN_REPORT);
+                    }
+                    index = index + 1;
+                }
+            }
+            // ACTION_MOVE=2
+            2 => {
+                let mt = G_INPUT_MT.lock().unwrap();
+                let mut index = 0;
+                while index != MAX_POINTERS {
+                    if mt[index] != 0 {
+                        if index < pointer_count {
+                            let x = xs[index];
+                            let y = ys[index];
+                            let pressure = pressures[index];
+
+                            input_event_write(fd, EV_ABS, ABS_MT_SLOT, index as i32);
+                            input_event_write(fd, EV_ABS, ABS_MT_POSITION_X, x as i32);
+                            input_event_write(fd, EV_ABS, ABS_MT_POSITION_Y, y as i32);
+
+                            input_event_write(fd, EV_ABS, ABS_MT_PRESSURE, pressure as i32);
+
+                            input_event_write(fd, EV_SYN, SYN_REPORT, SYN_REPORT);
+                        }
+                    }
+                    index = index + 1;
+                }
+            }
+            // ACTION_CANCEL=3, ACTION_POINTER_UP=6
+            3 | 6 => {
+                if pointer_index >= pointer_count {
+                    return;
+                }
+                let pointer_id = pointer_ids[pointer_index];
+                if (pointer_id as usize) >= MAX_POINTERS {
+                    return;
+                }
 
                 let mut mt = G_INPUT_MT.lock().unwrap();
                 if mt[pointer_id as usize] == 0 {
