@@ -127,6 +127,24 @@ pub fn renderer_init(
             error!("Failed to create init symlink: {:?}", e);
         }
 
+        // Create symlink: rootfs/system/lib64/egl/libGLES_android.so -> libGLES_stub.so
+        // This prevents zygote abort "couldn't find an OpenGL ES implementation"
+        // libEGL.so dlopen's libGLES_android.so; the symlink resolves to libGLES_stub.so
+        // in apk_data_file context (accessible after chroot via symlink resolution)
+        let gles_stub_path = {
+            let loader_dir = std::path::Path::new(&loader_path)
+                .parent()
+                .unwrap_or(std::path::Path::new("."));
+            loader_dir.join("libGLES_stub.so").to_string_lossy().into_owned()
+        };
+        let gles_egl_dir = format!("{}/system/lib64/egl", working_dir);
+        let _ = std::fs::create_dir_all(&gles_egl_dir);
+        let gles_driver_path = format!("{}/libGLES_android.so", gles_egl_dir);
+        let _ = std::fs::remove_file(&gles_driver_path);
+        if let Err(e) = std::os::unix::fs::symlink(&gles_stub_path, &gles_driver_path) {
+            error!("Failed to create libGLES_android.so symlink: {:?}", e);
+        }
+
         // Write diagnostic info to log file
         let mut diag = String::new();
         diag.push_str("=== twoyi boot diagnostic ===\n");
