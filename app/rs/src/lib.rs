@@ -165,17 +165,17 @@ pub fn handle_touch_data(
     let pointer_index = pointer_index as usize;
     let pointer_count = pointer_count as usize;
 
-    let ids = env.get_int_array_elements(pointer_ids, jni::sys::JNI_FALSE).unwrap();
-    let x_vals = env.get_float_array_elements(xs, jni::sys::JNI_FALSE).unwrap();
-    let y_vals = env.get_float_array_elements(ys, jni::sys::JNI_FALSE).unwrap();
-    let p_vals = env.get_float_array_elements(pressures, jni::sys::JNI_FALSE).unwrap();
+    let mut ids_buf = vec![0i32; pointer_count];
+    let mut x_buf = vec![0f32; pointer_count];
+    let mut y_buf = vec![0f32; pointer_count];
+    let mut p_buf = vec![0f32; pointer_count];
 
-    let ids_slice = unsafe { std::slice::from_raw_parts(ids.as_ptr(), pointer_count) };
-    let x_slice = unsafe { std::slice::from_raw_parts(x_vals.as_ptr(), pointer_count) };
-    let y_slice = unsafe { std::slice::from_raw_parts(y_vals.as_ptr(), pointer_count) };
-    let p_slice = unsafe { std::slice::from_raw_parts(p_vals.as_ptr(), pointer_count) };
+    env.get_int_array_region(pointer_ids, 0, &mut ids_buf).unwrap();
+    env.get_float_array_region(xs, 0, &mut x_buf).unwrap();
+    env.get_float_array_region(ys, 0, &mut y_buf).unwrap();
+    env.get_float_array_region(pressures, 0, &mut p_buf).unwrap();
 
-    input::handle_touch_data(action, pointer_index, pointer_count, ids_slice, x_slice, y_slice, p_slice);
+    input::handle_touch_data(action, pointer_index, pointer_count, &ids_buf, &x_buf, &y_buf, &p_buf);
 }
 
 pub fn send_key_code(_env: JNIEnv, _clz: jclass, keycode: jint) {
