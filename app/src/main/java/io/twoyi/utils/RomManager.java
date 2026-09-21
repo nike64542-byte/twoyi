@@ -93,6 +93,16 @@ public final class RomManager {
             properties.store(writer, null);
         } catch (IOException ignored) {
         }
+
+        // Write persist property to /data/property/ (loaded last, highest priority)
+        // This overrides any persist.sys.preload.opengl from /system/build.prop
+        File persistDir = new File(getRootfsDir(context), "data/property");
+        ensureDir(persistDir);
+        File persistGlFile = new File(persistDir, "persist.sys.preload.opengl");
+        try (Writer writer = new FileWriter(persistGlFile)) {
+            writer.write("false");
+        } catch (IOException ignored) {
+        }
     }
 
     public static void ensureBootFiles(Context context) {
