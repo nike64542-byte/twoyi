@@ -72,9 +72,12 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew assembleRelease
 
+    - name: Generate Keystore
+      run: |
+        keytool -genkeypair -v -keystore release.keystore -alias twoyi -keyalg RSA -keysize 2048 -validity 10000 -storepass ${{ secrets.KEYSTORE_PASSWORD }} -keypass ${{ secrets.KEYSTORE_PASSWORD }} -dname "CN=Twoyi, OU=Dev, O=Twoyi, L=Beijing, ST=BJ, C=CN"
+
     - name: Sign APK
       run: |
-        keytool -genkeypair -v -keystore release.keystore -alias twoyi -keyalg RSA -keysize 2048 -validity 10000 -storepass twoyi123 -keypass twoyi123 -dname "CN=Twoyi, OU=Dev, O=Twoyi, L=Beijing, ST=BJ, C=CN"
         APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
         echo "Found APK: $APK_FILE"
         if [ -z "$APK_FILE" ]; then
@@ -83,8 +86,8 @@ jobs:
           exit 1
         fi
         mkdir -p signed
-        zipalign -v -p 4 "$APK_FILE" signed/twoyi-aligned.apk
-        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:twoyi123 --key-pass pass:twoyi123 --ks-key-alias twoyi --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true signed/twoyi.apk signed/twoyi-aligned.apk
+        $ANDROID_HOME/build-tools/34.0.0/zipalign -v -p 4 "$APK_FILE" signed/twoyi-aligned.apk
+        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.KEYSTORE_PASSWORD }} --ks-key-alias twoyi --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true signed/twoyi.apk signed/twoyi-aligned.apk
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
