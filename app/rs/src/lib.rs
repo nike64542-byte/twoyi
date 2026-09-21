@@ -104,24 +104,66 @@ pub fn renderer_init(
         let working_dir = "/data/data/io.twoyi/rootfs";
         let log_path = "/data/data/io.twoyi/log.txt";
 
-        info!("init spawn: working_dir={}, loader_path={}, log_path={}", working_dir, loader_path, log_path);
-
-        // Check if init binary exists
+        // Check if init binary exists and collect diagnostic info
         let init_path = format!("{}/init", working_dir);
+        let mut diag = String::new();
+        diag.push_str(&format!("=== twoyi boot diagnostic ===\n"));
+        diag.push_str(&format!("working_dir={}\n", working_dir));
+        diag.push_str(&format!("loader_path={}\n", loader_path));
+        diag.push_str(&format!("log_path={}\n", log_path));
+        diag.push_str(&format!("init_path={}\n", init_path));
+
+        // Check loader64 symlink
+        let loader64_path = "/data/data/io.twoyi/loader64";
+        match std::fs::read_link(loader64_path) {
+            Ok(target) => diag.push_str(&format!("loader64 symlink -> {}\n", target.display())),
+            Err(e) => diag.push_str(&format!("loader64 symlink error: {:?}\n", e)),
+        }
+
+        // Check init binary
         match std::fs::metadata(&init_path) {
             Ok(meta) => {
-                info!("init binary found: {}, size={}, executable={}", init_path, meta.len(), std::os::unix::fs::PermissionsExt::mode(&meta.permissions()) & 0o111 != 0);
+                let mode = std::os::unix::fs::PermissionsExt::mode(&meta.permissions());
+                diag.push_str(&format!("init found: size={}, mode={:#o}, executable={}\n", meta.len(), mode, mode & 0o111 != 0));
+                
+                // Read first bytes to check ELF magic
+                if let Ok(mut f) = std::fs::File::open(&init_path) {
+                    use std::io::Read;
+                    let mut buf = [0u8; 32];
+                    if let Ok(n) = f.read(&mut buf) {
+                        diag.push_str(&format!("init first {} bytes: {:?}\n", n, &buf[..n]));
+                        if n >= 4 && &buf[..4] == b"\x7fELF" {
+                            diag.push_str("init is ELF binary\n");
+                            if n >= 5 {
+                                diag.push_str(&format!("ELF class: {} (1=32bit, 2=64bit)\n", buf[4]));
+                            }
+                        } else if n >= 2 && &buf[..2] == b"#!" {
+                            diag.push_str("init is a script\n");
+                        }
+                    }
+                }
             }
             Err(e) => {
-                error!("init binary NOT found at {}: {:?}", init_path, e);
-                // List rootfs dir contents for debugging
+                diag.push_str(&format!("init NOT found: {:?}\n", e));
+                // List rootfs dir contents
                 if let Ok(entries) = std::fs::read_dir(working_dir) {
-                    let mut listing = String::new();
-                    for entry in entries.flatten().take(30) {
-                        listing.push_str(&format!("{} ", entry.file_name().to_string_lossy()));
+                    diag.push_str("rootfs dir contents:\n");
+                    for entry in entries.flatten().take(50) {
+                        let name = entry.file_name();
+                        diag.push_str(&format!("  {}\n", name.to_string_lossy()));
                     }
-                    error!("rootfs dir contents: {}", listing);
                 }
+            }
+        }
+
+        // Check loader64 binary
+        match std::fs::metadata(loader64_path) {
+            Ok(meta) => {
+                let mode = std::os::unix::fs::PermissionsExt::mode(&meta.permissions());
+                diag.push_str(&format!("loader64 found: size={}, mode={:#o}, executable={}\n", meta.len(), mode, mode & 0o111 != 0));
+            }
+            Err(e) => {
+                diag.push_str(&format!("loader64 NOT found: {:?}\n", e));
             }
         }
 
@@ -132,6 +174,15 @@ pub fn renderer_init(
                 return;
             }
         };
+
+        // Write diagnostic info to log file before init starts
+        {
+            use std::io::Write;
+            let mut log_writer = std::io::BufWriter::new(&outputs);
+            let _ = writeln!(log_writer, "{}", diag);
+            let _ = log_writer.flush();
+        }
+
         let errors = match outputs.try_clone() {
             Ok(f) => f,
             Err(e) => {
@@ -147,9 +198,19 @@ pub fn renderer_init(
             .spawn() {
             Ok(child) => {
                 info!("init spawned successfully, pid={}", child.id());
+                // Also write to log file
+                if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(log_path) {
+                    use std::io::Write;
+                    let _ = writeln!(f, "init spawned: pid={}", child.id());
+                }
             }
             Err(e) => {
                 error!("init spawn FAILED: {:?}", e);
+                // Write error to log file
+                if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(log_path) {
+                    use std::io::Write;
+                    let _ = writeln!(f, "init spawn FAILED: {:?}", e);
+                }
             }
         }
     }
