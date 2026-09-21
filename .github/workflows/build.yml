@@ -49,6 +49,13 @@ jobs:
     - name: Install cargo-xdk
       run: cargo install cargo-xdk
 
+    - name: Download ROM files
+      run: |
+        mkdir -p app/src/main/assets
+        curl -sL -o app/src/main/assets/rootfs.7z "https://github.com/nike64542-byte/twoyi/releases/download/v0.5.4/rootfs.7z"
+        curl -sL -o app/src/main/assets/rom.ini "https://github.com/nike64542-byte/twoyi/releases/download/v0.5.4/rom.ini"
+        ls -la app/src/main/assets/
+
     - name: Cache Gradle packages
       uses: actions/cache@v4
       with:
