@@ -26,6 +26,9 @@ const KEY_DEVICE_NAME: &'static str = "vkey";
 const KEY_DEVICE_UNIQUE_ID: &'static str = "<keyboard 0>";
 const KEY_PATH: &'static str = "/data/data/io.twoyi/rootfs/dev/input/key0";
 
+const BTN_TOUCH_VALUE: i32 = 1;
+const BTN_TOOL_FINGER_VALUE: i32 = 1;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct device_info {
@@ -120,12 +123,12 @@ pub fn handle_touch(ev: MotionEvent) {
                 let mut index = 0;
                 while index < MAX_POINTERS {
                     if mt[index] != 0 {
-                        input_event_write(fd, EV_ABS, ABS_MT_SLOT, pointer_id);
+                        input_event_write(fd, EV_ABS, ABS_MT_SLOT, index as i32);
                         input_event_write(fd, EV_ABS, ABS_MT_TRACKING_ID, pointer_id + 1);
 
                         if index == 0 {
-                            input_event_write(fd, EV_KEY, BTN_TOUCH, 108);
-                            input_event_write(fd, EV_KEY, BTN_TOOL_FINGER, 108);
+                            input_event_write(fd, EV_KEY, BTN_TOUCH, BTN_TOUCH_VALUE);
+                            input_event_write(fd, EV_KEY, BTN_TOOL_FINGER, BTN_TOOL_FINGER_VALUE);
                         }
 
                         input_event_write(fd, EV_ABS, ABS_MT_POSITION_X, x as i32);
@@ -230,12 +233,12 @@ pub fn handle_touch_data(
                 let mut index = 0;
                 while index < MAX_POINTERS {
                     if mt[index] != 0 {
-                        input_event_write(fd, EV_ABS, ABS_MT_SLOT, pointer_id);
+                        input_event_write(fd, EV_ABS, ABS_MT_SLOT, index as i32);
                         input_event_write(fd, EV_ABS, ABS_MT_TRACKING_ID, pointer_id + 1);
 
                         if index == 0 {
-                            input_event_write(fd, EV_KEY, BTN_TOUCH, 108);
-                            input_event_write(fd, EV_KEY, BTN_TOOL_FINGER, 108);
+                            input_event_write(fd, EV_KEY, BTN_TOUCH, BTN_TOUCH_VALUE);
+                            input_event_write(fd, EV_KEY, BTN_TOOL_FINGER, BTN_TOOL_FINGER_VALUE);
                         }
 
                         input_event_write(fd, EV_ABS, ABS_MT_POSITION_X, x as i32);
