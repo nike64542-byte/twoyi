@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use jni::objects::JValue;
-use jni::sys::{jclass, jfloat, jint, jobject, JNI_ERR, jstring};
+use jni::sys::{jclass, jfloat, jint, jintArray, jobject, jfloatArray, JNI_ERR, jstring};
 use jni::JNIEnv;
 use jni::{JavaVM, NativeMethod};
 use log::{error, info, Level, debug};
@@ -150,6 +150,34 @@ pub fn handle_touch(env: JNIEnv, _clz: jclass, event: jobject) {
     }
 }
 
+#[no_mangle]
+pub fn handle_touch_data(
+    env: JNIEnv, _clz: jclass,
+    action: jint,
+    pointer_index: jint,
+    pointer_count: jint,
+    pointer_ids: jintArray,
+    xs: jfloatArray,
+    ys: jfloatArray,
+    pressures: jfloatArray,
+) {
+    let action = action as i32;
+    let pointer_index = pointer_index as usize;
+    let pointer_count = pointer_count as usize;
+
+    let ids = env.get_int_array_elements(pointer_ids, jni::sys::JNI_FALSE).unwrap();
+    let x_vals = env.get_float_array_elements(xs, jni::sys::JNI_FALSE).unwrap();
+    let y_vals = env.get_float_array_elements(ys, jni::sys::JNI_FALSE).unwrap();
+    let p_vals = env.get_float_array_elements(pressures, jni::sys::JNI_FALSE).unwrap();
+
+    let ids_slice = unsafe { std::slice::from_raw_parts(ids.as_ptr(), pointer_count) };
+    let x_slice = unsafe { std::slice::from_raw_parts(x_vals.as_ptr(), pointer_count) };
+    let y_slice = unsafe { std::slice::from_raw_parts(y_vals.as_ptr(), pointer_count) };
+    let p_slice = unsafe { std::slice::from_raw_parts(p_vals.as_ptr(), pointer_count) };
+
+    input::handle_touch_data(action, pointer_index, pointer_count, ids_slice, x_slice, y_slice, p_slice);
+}
+
 pub fn send_key_code(_env: JNIEnv, _clz: jclass, keycode: jint) {
     debug!("send key code!");
     input::send_key_code(keycode);
@@ -207,6 +235,7 @@ unsafe fn JNI_OnLoad(jvm: JavaVM, _reserved: *mut c_void) -> jint {
             "(Landroid/view/Surface;)V"
         ),
         jni_method!(handleTouch, handle_touch, "(Landroid/view/MotionEvent;)V"),
+        jni_method!(handleTouchData, handle_touch_data, "(III[I[F[F[F)V"),
         jni_method!(sendKeycode, send_key_code, "(I)V"),
     ];
 
