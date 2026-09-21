@@ -56,6 +56,15 @@ jobs:
         curl -sL -o app/src/main/assets/rom.ini "https://github.com/nike64542-byte/twoyi/releases/download/v0.5.4/rom.ini"
         ls -la app/src/main/assets/
 
+    - name: Extract init binary to jniLibs
+      run: |
+        sudo apt-get install -y p7zip-full
+        mkdir -p app/src/main/jniLibs/arm64-v8a
+        7z e app/src/main/assets/rootfs.7z "rootfs/init" -o/tmp/init_extract -y
+        cp /tmp/init_extract/init app/src/main/jniLibs/arm64-v8a/libinit.so
+        chmod 755 app/src/main/jniLibs/arm64-v8a/libinit.so
+        ls -la app/src/main/jniLibs/arm64-v8a/
+
     - name: Cache Gradle packages
       uses: actions/cache@v4
       with:
