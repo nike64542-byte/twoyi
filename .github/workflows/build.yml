@@ -82,9 +82,9 @@ jobs:
           ls -la app/build/outputs/apk/release/ || echo "Directory not found"
           exit 1
         fi
-        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass twoyi123 -keypass twoyi123 "$APK_FILE" twoyi
         mkdir -p signed
-        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:twoyi123 --key-pass pass:twoyi123 --ks-key-alias twoyi --out signed/twoyi.apk "$APK_FILE"
+        zipalign -v -p 4 "$APK_FILE" signed/twoyi-aligned.apk
+        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:twoyi123 --key-pass pass:twoyi123 --ks-key-alias twoyi --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true signed/twoyi.apk signed/twoyi-aligned.apk
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
