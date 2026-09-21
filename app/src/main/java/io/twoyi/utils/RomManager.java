@@ -80,6 +80,7 @@ public final class RomManager {
         properties.setProperty("ro.sf.lcd_density", String.valueOf(DisplayMetrics.DENSITY_DEVICE_STABLE));
 
         properties.setProperty("persist.sys.preload.opengl", "false");
+        properties.setProperty("ro.zygote", "zygote64");
 
         try (Writer writer = new FileWriter(propFile)) {
             properties.store(writer, null);
