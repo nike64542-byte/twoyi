@@ -72,9 +72,16 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew assembleRelease
 
+    - name: Sign APK
+      run: |
+        keytool -genkeypair -v -keystore release.keystore -alias twoyi -keyalg RSA -keysize 2048 -validity 10000 -storepass twoyi123 -keypass twoyi123 -dname "CN=Twoyi, OU=Dev, O=Twoyi, L=Beijing, ST=BJ, C=CN"
+        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass twoyi123 -keypass twoyi123 app/build/outputs/apk/release/app-release-unsigned.apk twoyi
+        mkdir -p signed
+        $ANDROID_HOME/build-tools/34.0.0/apksigner sign --ks release.keystore --ks-pass pass:twoyi123 --key-pass pass:twoyi123 --ks-key-alias twoyi --out signed/twoyi.apk app/build/outputs/apk/release/app-release-unsigned.apk
+
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: twoyi-apk
-        path: app/build/outputs/apk/release/*.apk
+        path: signed/twoyi.apk
         retention-days: 30
