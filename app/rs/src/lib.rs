@@ -16,6 +16,7 @@ use std::thread;
 use android_logger::Config;
 
 use std::fs::File;
+use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
 
 mod input;
@@ -102,6 +103,28 @@ pub fn renderer_init(
         };
         let working_dir = "/data/data/io.twoyi/rootfs";
         let log_path = "/data/data/io.twoyi/log.txt";
+
+        info!("init spawn: working_dir={}, loader_path={}, log_path={}", working_dir, loader_path, log_path);
+
+        // Check if init binary exists
+        let init_path = format!("{}/init", working_dir);
+        match std::fs::metadata(&init_path) {
+            Ok(meta) => {
+                info!("init binary found: {}, size={}, executable={}", init_path, meta.len(), std::os::unix::fs::PermissionsExt::mode(&meta.permissions()) & 0o111 != 0);
+            }
+            Err(e) => {
+                error!("init binary NOT found at {}: {:?}", init_path, e);
+                // List rootfs dir contents for debugging
+                if let Ok(entries) = std::fs::read_dir(working_dir) {
+                    let mut listing = String::new();
+                    for entry in entries.flatten().take(30) {
+                        listing.push_str(&format!("{} ", entry.file_name().to_string_lossy()));
+                    }
+                    error!("rootfs dir contents: {}", listing);
+                }
+            }
+        }
+
         let outputs = match File::create(log_path) {
             Ok(f) => f,
             Err(e) => {
@@ -116,12 +139,19 @@ pub fn renderer_init(
                 return;
             }
         };
-        let _ = Command::new("./init")
+        match Command::new("./init")
             .current_dir(working_dir)
             .env("TYLOADER", loader_path)
             .stdout(Stdio::from(outputs))
             .stderr(Stdio::from(errors))
-            .spawn();
+            .spawn() {
+            Ok(child) => {
+                info!("init spawned successfully, pid={}", child.id());
+            }
+            Err(e) => {
+                error!("init spawn FAILED: {:?}", e);
+            }
+        }
     }
 }
 
