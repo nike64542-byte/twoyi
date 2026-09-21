@@ -104,13 +104,24 @@ pub fn renderer_init(
         let working_dir = "/data/data/io.twoyi/rootfs";
         let log_path = "/data/data/io.twoyi/log.txt";
 
-        // Check if init binary exists and collect diagnostic info
-        let init_path = format!("{}/init", working_dir);
+        // On Android 10+, SELinux blocks execution of binaries from app data directory.
+        // libinit.so is packaged as a native library (in lib/arm64-v8a/), which has
+        // apk_data_file SELinux context that allows execution.
+        // The loader_path is like: /data/app/.../lib/arm64/libloader.so
+        // libinit.so should be in the same directory.
+        let init_path = {
+            let loader_dir = std::path::Path::new(&loader_path)
+                .parent()
+                .unwrap_or(std::path::Path::new("."));
+            let candidate = loader_dir.join("libinit.so");
+            candidate.to_string_lossy().into_owned()
+        };
+
+        // Write diagnostic info to log file
         let mut diag = String::new();
-        diag.push_str(&format!("=== twoyi boot diagnostic ===\n"));
+        diag.push_str("=== twoyi boot diagnostic ===\n");
         diag.push_str(&format!("working_dir={}\n", working_dir));
         diag.push_str(&format!("loader_path={}\n", loader_path));
-        diag.push_str(&format!("log_path={}\n", log_path));
         diag.push_str(&format!("init_path={}\n", init_path));
 
         // Check loader64 symlink
@@ -125,45 +136,9 @@ pub fn renderer_init(
             Ok(meta) => {
                 let mode = std::os::unix::fs::PermissionsExt::mode(&meta.permissions());
                 diag.push_str(&format!("init found: size={}, mode={:#o}, executable={}\n", meta.len(), mode, mode & 0o111 != 0));
-                
-                // Read first bytes to check ELF magic
-                if let Ok(mut f) = std::fs::File::open(&init_path) {
-                    use std::io::Read;
-                    let mut buf = [0u8; 32];
-                    if let Ok(n) = f.read(&mut buf) {
-                        diag.push_str(&format!("init first {} bytes: {:?}\n", n, &buf[..n]));
-                        if n >= 4 && &buf[..4] == b"\x7fELF" {
-                            diag.push_str("init is ELF binary\n");
-                            if n >= 5 {
-                                diag.push_str(&format!("ELF class: {} (1=32bit, 2=64bit)\n", buf[4]));
-                            }
-                        } else if n >= 2 && &buf[..2] == b"#!" {
-                            diag.push_str("init is a script\n");
-                        }
-                    }
-                }
             }
             Err(e) => {
-                diag.push_str(&format!("init NOT found: {:?}\n", e));
-                // List rootfs dir contents
-                if let Ok(entries) = std::fs::read_dir(working_dir) {
-                    diag.push_str("rootfs dir contents:\n");
-                    for entry in entries.flatten().take(50) {
-                        let name = entry.file_name();
-                        diag.push_str(&format!("  {}\n", name.to_string_lossy()));
-                    }
-                }
-            }
-        }
-
-        // Check loader64 binary
-        match std::fs::metadata(loader64_path) {
-            Ok(meta) => {
-                let mode = std::os::unix::fs::PermissionsExt::mode(&meta.permissions());
-                diag.push_str(&format!("loader64 found: size={}, mode={:#o}, executable={}\n", meta.len(), mode, mode & 0o111 != 0));
-            }
-            Err(e) => {
-                diag.push_str(&format!("loader64 NOT found: {:?}\n", e));
+                diag.push_str(&format!("init NOT found at {}: {:?}\n", init_path, e));
             }
         }
 
@@ -190,7 +165,10 @@ pub fn renderer_init(
                 return;
             }
         };
-        match Command::new("./init")
+
+        // Execute libinit.so from native lib directory instead of ./init from rootfs
+        // This bypasses SELinux execute restriction on app_data_file
+        match Command::new(&init_path)
             .current_dir(working_dir)
             .env("TYLOADER", loader_path)
             .stdout(Stdio::from(outputs))
@@ -198,7 +176,6 @@ pub fn renderer_init(
             .spawn() {
             Ok(child) => {
                 info!("init spawned successfully, pid={}", child.id());
-                // Also write to log file
                 if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(log_path) {
                     use std::io::Write;
                     let _ = writeln!(f, "init spawned: pid={}", child.id());
@@ -206,7 +183,6 @@ pub fn renderer_init(
             }
             Err(e) => {
                 error!("init spawn FAILED: {:?}", e);
-                // Write error to log file
                 if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(log_path) {
                     use std::io::Write;
                     let _ = writeln!(f, "init spawn FAILED: {:?}", e);
