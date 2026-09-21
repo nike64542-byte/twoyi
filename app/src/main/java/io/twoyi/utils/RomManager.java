@@ -282,9 +282,20 @@ public final class RomManager {
         try (SevenZFile sevenZFile = new SevenZFile(rootfs7z)) {
             SevenZArchiveEntry entry;
             File rootfsDir = getRootfsDir(context);
+            String rootfsPrefix = "rootfs/";
             
             while ((entry = sevenZFile.getNextEntry()) != null) {
-                File outFile = new File(rootfsDir, entry.getName());
+                String entryName = entry.getName();
+                
+                // Strip "rootfs/" prefix to avoid nested rootfs/rootfs/ directory
+                if (entryName.startsWith(rootfsPrefix)) {
+                    entryName = entryName.substring(rootfsPrefix.length());
+                }
+                if (entryName.isEmpty()) {
+                    continue;
+                }
+                
+                File outFile = new File(rootfsDir, entryName);
                 
                 if (entry.isDirectory()) {
                     outFile.mkdirs();
