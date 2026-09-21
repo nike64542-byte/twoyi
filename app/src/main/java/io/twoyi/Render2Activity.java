@@ -153,6 +153,8 @@ public class Render2Activity extends Activity implements View.OnTouchListener {
 
         boolean shouldExtractRom = !romExist || forceInstall || (!use3rdRom && factoryRomUpdated);
 
+        Log.i(TAG, "bootSystem: romExist=" + romExist + " needsUpgrade=" + factoryRomUpdated + " forceInstall=" + forceInstall + " shouldExtract=" + shouldExtractRom);
+
         if (shouldExtractRom) {
             Log.i(TAG, "extracting rom...");
 
@@ -165,12 +167,15 @@ public class Render2Activity extends Activity implements View.OnTouchListener {
 
                 RomManager.initRootfs(getApplicationContext());
 
+                Log.i(TAG, "rom extraction completed, romExist=" + RomManager.romExist(this));
+
                 runOnUiThread(() -> {
                     mRootView.addView(mSurfaceView, 0);
                     showBootingProcedure();
                 });
             }, "extract-rom").start();
         } else {
+            Log.i(TAG, "rom already exists, starting boot directly");
             mRootView.addView(mSurfaceView, 0);
             showBootingProcedure();
         }
