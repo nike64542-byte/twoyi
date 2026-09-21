@@ -117,12 +117,23 @@ pub fn renderer_init(
             candidate.to_string_lossy().into_owned()
         };
 
+        // Create symlink: rootfs/init -> libinit.so (in native lib dir)
+        // This allows init to re-exec itself after chroot: ./init resolves to the symlink,
+        // which points to libinit.so in apk_data_file context (executable).
+        let rootfs_init = format!("{}/init", working_dir);
+        let _ = std::fs::remove_file(&rootfs_init);
+        if let Err(e) = std::os::unix::fs::symlink(&init_path, &rootfs_init) {
+            // If symlink fails (maybe file exists), try to overwrite
+            error!("Failed to create init symlink: {:?}", e);
+        }
+
         // Write diagnostic info to log file
         let mut diag = String::new();
         diag.push_str("=== twoyi boot diagnostic ===\n");
         diag.push_str(&format!("working_dir={}\n", working_dir));
         diag.push_str(&format!("loader_path={}\n", loader_path));
         diag.push_str(&format!("init_path={}\n", init_path));
+        diag.push_str(&format!("rootfs_init_symlink={}\n", rootfs_init));
 
         // Check loader64 symlink
         let loader64_path = "/data/data/io.twoyi/loader64";
@@ -166,9 +177,14 @@ pub fn renderer_init(
             }
         };
 
-        // Execute libinit.so from native lib directory instead of ./init from rootfs
-        // This bypasses SELinux execute restriction on app_data_file
-        match Command::new(&init_path)
+        // Execute ./init (symlink to libinit.so) from rootfs directory.
+        // The kernel resolves the symlink and executes libinit.so from native lib dir.
+        // After chroot, ./init resolves to the symlink which still points to libinit.so.
+        // Set argv[0] to "init" so the program name is correct.
+        use std::os::unix::process::CommandExt;
+        let mut cmd = Command::new("./init");
+        cmd.arg0("init");
+        match cmd
             .current_dir(working_dir)
             .env("TYLOADER", loader_path)
             .stdout(Stdio::from(outputs))
