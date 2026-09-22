@@ -129,8 +129,9 @@ pub fn renderer_init(
 
         // Create symlink: rootfs/system/lib64/egl/libGLES_android.so -> libGLES_stub.so
         // This prevents zygote abort "couldn't find an OpenGL ES implementation"
-        // libEGL.so dlopen's libGLES_android.so; the symlink resolves to libGLES_stub.so
+        // libEGL.so dlopen's libGLES_${tag}.so; the symlink resolves to libGLES_stub.so
         // in apk_data_file context (accessible after chroot via symlink resolution)
+        // Create symlinks for multiple possible driver tags (android, goldfish, adreno, mali, etc.)
         let gles_stub_path = {
             let loader_dir = std::path::Path::new(&loader_path)
                 .parent()
@@ -139,11 +140,30 @@ pub fn renderer_init(
         };
         let gles_egl_dir = format!("{}/system/lib64/egl", working_dir);
         let _ = std::fs::create_dir_all(&gles_egl_dir);
-        let gles_driver_path = format!("{}/libGLES_android.so", gles_egl_dir);
-        let _ = std::fs::remove_file(&gles_driver_path);
-        if let Err(e) = std::os::unix::fs::symlink(&gles_stub_path, &gles_driver_path) {
-            error!("Failed to create libGLES_android.so symlink: {:?}", e);
+        
+        // Log existing egl directory contents
+        if let Ok(entries) = std::fs::read_dir(&gles_egl_dir) {
+            let mut listing = String::new();
+            for entry in entries.flatten().take(20) {
+                listing.push_str(&format!("{} ", entry.file_name().to_string_lossy()));
+            }
+            diag.push_str(&format!("egl dir contents: {}\n", listing));
         }
+        
+        // Check egl.cfg if it exists
+        let egl_cfg_path = format!("{}/egl.cfg", gles_egl_dir);
+        if let Ok(cfg) = std::fs::read_to_string(&egl_cfg_path) {
+            diag.push_str(&format!("egl.cfg: {}\n", cfg));
+        }
+        
+        // Create symlinks for all common driver names
+        let driver_tags = ["android", "goldfish", "adreno", "mali", "qualcomm", "powervr"];
+        for tag in driver_tags {
+            let driver_path = format!("{}/libGLES_{}.so", gles_egl_dir, tag);
+            let _ = std::fs::remove_file(&driver_path);
+            let _ = std::os::unix::fs::symlink(&gles_stub_path, &driver_path);
+        }
+        diag.push_str(&format!("created EGL stub symlinks in {}\n", gles_egl_dir));
 
         // Write diagnostic info to log file
         let mut diag = String::new();
