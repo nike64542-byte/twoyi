@@ -155,42 +155,6 @@ pub fn renderer_init(
             }
         }
 
-        // Verify the copied stub library
-        let stub_verify_path = format!("{}/libGLES_android.so", gles_egl_dir);
-        match std::fs::metadata(&stub_verify_path) {
-            Ok(meta) => {
-                let mode = std::os::unix::fs::PermissionsExt::mode(&meta.permissions());
-                diag.push_str(&format!("libGLES_android.so: size={}, mode={:#o}\n", meta.len(), mode));
-            }
-            Err(e) => {
-                diag.push_str(&format!("libGLES_android.so NOT found: {:?}\n", e));
-            }
-        }
-        // Also check if there's a libEGL.so in system/lib64
-        let libegl_path = format!("{}/system/lib64/libEGL.so", working_dir);
-        match std::fs::metadata(&libegl_path) {
-            Ok(meta) => diag.push_str(&format!("libEGL.so: size={}\n", meta.len())),
-            Err(e) => diag.push_str(&format!("libEGL.so NOT found: {:?}\n", e)),
-        }
-        // Check what EGL search path libEGL.so uses (look for egl.cfg)
-        let egl_cfg = format!("{}/egl.cfg", gles_egl_dir);
-        match std::fs::read_to_string(&egl_cfg) {
-            Ok(cfg) => diag.push_str(&format!("egl.cfg: {}\n", cfg)),
-            Err(_) => diag.push_str("egl.cfg: not found\n"),
-        }
-        // Check ro.hardware.egl property source
-        let build_prop = format!("{}/system/build.prop", working_dir);
-        match std::fs::read_to_string(&build_prop) {
-            Ok(content) => {
-                for line in content.lines() {
-                    if line.contains("egl") || line.contains("preload.opengl") || line.contains("ro.hardware") {
-                        diag.push_str(&format!("build.prop: {}\n", line));
-                    }
-                }
-            }
-            Err(e) => diag.push_str(&format!("build.prop read error: {:?}\n", e)),
-        }
-
         // Write diagnostic info to log file
         let mut diag = String::new();
         diag.push_str("=== twoyi boot diagnostic ===\n");
@@ -215,6 +179,42 @@ pub fn renderer_init(
             Err(e) => {
                 diag.push_str(&format!("init NOT found at {}: {:?}\n", init_path, e));
             }
+        }
+
+        // Verify the copied stub library
+        let stub_verify_path = format!("{}/libGLES_android.so", gles_egl_dir);
+        match std::fs::metadata(&stub_verify_path) {
+            Ok(meta) => {
+                let mode = std::os::unix::fs::PermissionsExt::mode(&meta.permissions());
+                diag.push_str(&format!("libGLES_android.so: size={}, mode={:#o}\n", meta.len(), mode));
+            }
+            Err(e) => {
+                diag.push_str(&format!("libGLES_android.so NOT found: {:?}\n", e));
+            }
+        }
+        // Also check if there's a libEGL.so in system/lib64
+        let libegl_path = format!("{}/system/lib64/libEGL.so", working_dir);
+        match std::fs::metadata(&libegl_path) {
+            Ok(meta) => diag.push_str(&format!("libEGL.so: size={}\n", meta.len())),
+            Err(e) => diag.push_str(&format!("libEGL.so NOT found: {:?}\n", e)),
+        }
+        // Check egl.cfg
+        let egl_cfg = format!("{}/egl.cfg", gles_egl_dir);
+        match std::fs::read_to_string(&egl_cfg) {
+            Ok(cfg) => diag.push_str(&format!("egl.cfg: {}\n", cfg)),
+            Err(_) => diag.push_str("egl.cfg: not found\n"),
+        }
+        // Check build.prop for EGL-related properties
+        let build_prop = format!("{}/system/build.prop", working_dir);
+        match std::fs::read_to_string(&build_prop) {
+            Ok(content) => {
+                for line in content.lines() {
+                    if line.contains("egl") || line.contains("preload.opengl") || line.contains("ro.hardware") {
+                        diag.push_str(&format!("build.prop: {}\n", line));
+                    }
+                }
+            }
+            Err(e) => diag.push_str(&format!("build.prop read error: {:?}\n", e)),
         }
 
         // Log EGL stub info
