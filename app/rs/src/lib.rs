@@ -127,32 +127,44 @@ pub fn renderer_init(
             error!("Failed to create init symlink: {:?}", e);
         }
 
-        // Copy libGLES_stub.so into rootfs to prevent zygote OpenGL ES abort
-        // libEGL.so dlopen's /system/lib64/egl/libGLES_${tag}.so
-        // We copy the stub library directly into the rootfs (not symlink, because
-        // symlinks to absolute paths outside chroot don't resolve after chroot)
+        // Copy libGLES_stub.so AND libOpenglRender.so into rootfs
+        // The custom libEGL.so in this ROM may look for libOpenglRender.so
+        // instead of libGLES_android.so as the EGL driver
         let gles_stub_path = {
             let loader_dir = std::path::Path::new(&loader_path)
                 .parent()
                 .unwrap_or(std::path::Path::new("."));
             loader_dir.join("libGLES_stub.so").to_string_lossy().into_owned()
         };
+        let opengl_render_path = {
+            let loader_dir = std::path::Path::new(&loader_path)
+                .parent()
+                .unwrap_or(std::path::Path::new("."));
+            loader_dir.join("libOpenglRender.so").to_string_lossy().into_owned()
+        };
         let gles_egl_dir = format!("{}/system/lib64/egl", working_dir);
         let _ = std::fs::create_dir_all(&gles_egl_dir);
+        let system_lib_dir = format!("{}/system/lib64", working_dir);
+        
+        // Copy libOpenglRender.so to /system/lib64/ (where custom libEGL.so may look for it)
+        let render_dest = format!("{}/libOpenglRender.so", system_lib_dir);
+        let _ = std::fs::remove_file(&render_dest);
+        let _ = std::fs::copy(&opengl_render_path, &render_dest);
+        let _ = std::fs::set_permissions(&render_dest, std::fs::Permissions::from_mode(0o755));
+        
+        // Also copy to /system/lib64/egl/ just in case
+        let render_egl_dest = format!("{}/libOpenglRender.so", gles_egl_dir);
+        let _ = std::fs::remove_file(&render_egl_dest);
+        let _ = std::fs::copy(&opengl_render_path, &render_egl_dest);
+        let _ = std::fs::set_permissions(&render_egl_dest, std::fs::Permissions::from_mode(0o755));
         
         // Copy stub library for all common driver names
-        let driver_tags = ["android", "goldfish", "adreno", "mali", "qualcomm", "powervr"];
+        let driver_tags = ["android", "goldfish", "adreno", "mali", "qualcomm", "powervr", "OpenglRender"];
         for tag in driver_tags {
             let driver_path = format!("{}/libGLES_{}.so", gles_egl_dir, tag);
             let _ = std::fs::remove_file(&driver_path);
-            match std::fs::copy(&gles_stub_path, &driver_path) {
-                Ok(n) => {
-                    let _ = std::fs::set_permissions(&driver_path, std::fs::Permissions::from_mode(0o755));
-                }
-                Err(e) => {
-                    error!("Failed to copy libGLES_stub.so to {}: {:?}", driver_path, e);
-                }
-            }
+            let _ = std::fs::copy(&gles_stub_path, &driver_path);
+            let _ = std::fs::set_permissions(&driver_path, std::fs::Permissions::from_mode(0o755));
         }
 
         // Write diagnostic info to log file
