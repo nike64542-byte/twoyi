@@ -172,8 +172,10 @@ public final class RomManager {
     public static final RomInfo DEFAULT_ROM_INFO = new RomInfo();
 
     public static boolean romExist(Context context) {
-        File initFile = new File(getRootfsDir(context), "init");
-        return initFile.exists();
+        // Don't check for "init" - it's now a symlink created by Rust code
+        // Check for a system library that must exist in a properly extracted rootfs
+        File libcFile = new File(getRootfsDir(context), "system/lib64/libc.so");
+        return libcFile.exists();
     }
 
     public static boolean needsUpgrade(Context context) {
