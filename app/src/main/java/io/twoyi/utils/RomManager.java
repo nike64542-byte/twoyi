@@ -103,6 +103,29 @@ public final class RomManager {
             writer.write("false");
         } catch (IOException ignored) {
         }
+
+        // Also patch /system/build.prop to remove/override persist.sys.preload.opengl
+        File buildProp = new File(getRootfsDir(context), "system/build.prop");
+        if (buildProp.exists() && buildProp.isFile()) {
+            try {
+                java.util.List<String> lines = java.nio.file.Files.readAllLines(buildProp.toPath());
+                java.util.List<String> patched = new java.util.ArrayList<>();
+                boolean found = false;
+                for (String line : lines) {
+                    if (line.startsWith("persist.sys.preload.opengl=")) {
+                        patched.add("persist.sys.preload.opengl=false");
+                        found = true;
+                    } else {
+                        patched.add(line);
+                    }
+                }
+                if (!found) {
+                    patched.add("persist.sys.preload.opengl=false");
+                }
+                java.nio.file.Files.write(buildProp.toPath(), patched);
+            } catch (IOException ignored) {
+            }
+        }
     }
 
     public static void ensureBootFiles(Context context) {
