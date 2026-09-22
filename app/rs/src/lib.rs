@@ -141,21 +141,6 @@ pub fn renderer_init(
         let gles_egl_dir = format!("{}/system/lib64/egl", working_dir);
         let _ = std::fs::create_dir_all(&gles_egl_dir);
         
-        // Log existing egl directory contents
-        if let Ok(entries) = std::fs::read_dir(&gles_egl_dir) {
-            let mut listing = String::new();
-            for entry in entries.flatten().take(20) {
-                listing.push_str(&format!("{} ", entry.file_name().to_string_lossy()));
-            }
-            diag.push_str(&format!("egl dir contents: {}\n", listing));
-        }
-        
-        // Check egl.cfg if it exists
-        let egl_cfg_path = format!("{}/egl.cfg", gles_egl_dir);
-        if let Ok(cfg) = std::fs::read_to_string(&egl_cfg_path) {
-            diag.push_str(&format!("egl.cfg: {}\n", cfg));
-        }
-        
         // Create symlinks for all common driver names
         let driver_tags = ["android", "goldfish", "adreno", "mali", "qualcomm", "powervr"];
         for tag in driver_tags {
@@ -163,7 +148,6 @@ pub fn renderer_init(
             let _ = std::fs::remove_file(&driver_path);
             let _ = std::os::unix::fs::symlink(&gles_stub_path, &driver_path);
         }
-        diag.push_str(&format!("created EGL stub symlinks in {}\n", gles_egl_dir));
 
         // Write diagnostic info to log file
         let mut diag = String::new();
@@ -189,6 +173,21 @@ pub fn renderer_init(
             Err(e) => {
                 diag.push_str(&format!("init NOT found at {}: {:?}\n", init_path, e));
             }
+        }
+
+        // Log EGL stub info
+        diag.push_str(&format!("gles_stub_path={}\n", gles_stub_path));
+        diag.push_str(&format!("gles_egl_dir={}\n", gles_egl_dir));
+        if let Ok(entries) = std::fs::read_dir(&gles_egl_dir) {
+            let mut listing = String::new();
+            for entry in entries.flatten().take(20) {
+                listing.push_str(&format!("{} ", entry.file_name().to_string_lossy()));
+            }
+            diag.push_str(&format!("egl dir contents: {}\n", listing));
+        }
+        let egl_cfg_path = format!("{}/egl.cfg", gles_egl_dir);
+        if let Ok(cfg) = std::fs::read_to_string(&egl_cfg_path) {
+            diag.push_str(&format!("egl.cfg: {}\n", cfg));
         }
 
         let outputs = match File::create(log_path) {
