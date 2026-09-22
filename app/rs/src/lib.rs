@@ -127,11 +127,10 @@ pub fn renderer_init(
             error!("Failed to create init symlink: {:?}", e);
         }
 
-        // Create symlink: rootfs/system/lib64/egl/libGLES_android.so -> libGLES_stub.so
-        // This prevents zygote abort "couldn't find an OpenGL ES implementation"
-        // libEGL.so dlopen's libGLES_${tag}.so; the symlink resolves to libGLES_stub.so
-        // in apk_data_file context (accessible after chroot via symlink resolution)
-        // Create symlinks for multiple possible driver tags (android, goldfish, adreno, mali, etc.)
+        // Copy libGLES_stub.so into rootfs to prevent zygote OpenGL ES abort
+        // libEGL.so dlopen's /system/lib64/egl/libGLES_${tag}.so
+        // We copy the stub library directly into the rootfs (not symlink, because
+        // symlinks to absolute paths outside chroot don't resolve after chroot)
         let gles_stub_path = {
             let loader_dir = std::path::Path::new(&loader_path)
                 .parent()
@@ -141,12 +140,14 @@ pub fn renderer_init(
         let gles_egl_dir = format!("{}/system/lib64/egl", working_dir);
         let _ = std::fs::create_dir_all(&gles_egl_dir);
         
-        // Create symlinks for all common driver names
+        // Copy stub library for all common driver names
         let driver_tags = ["android", "goldfish", "adreno", "mali", "qualcomm", "powervr"];
         for tag in driver_tags {
             let driver_path = format!("{}/libGLES_{}.so", gles_egl_dir, tag);
             let _ = std::fs::remove_file(&driver_path);
-            let _ = std::os::unix::fs::symlink(&gles_stub_path, &driver_path);
+            let _ = std::fs::copy(&gles_stub_path, &driver_path);
+            // Set executable permissions
+            let _ = std::fs::set_permissions(&driver_path, std::fs::Permissions::from_mode(0o755));
         }
 
         // Write diagnostic info to log file
